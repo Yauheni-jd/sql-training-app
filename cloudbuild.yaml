@@ -1,0 +1,23 @@
+steps:
+  # Step 1: Start the Cloud SQL Auth Proxy
+  - name: "gcr.io/cloudsql-docker/gce-proxy:1.33.1" # Cloud SQL Auth Proxy Docker image
+    args:
+      - /cloud_sql_proxy
+      - -instances=gothic-isotope-459517-e1:us-central1:my-database-2=tcp:3306
+    entrypoint: "/cloud_sql_proxy"
+
+  # Step 2: Apply Flyway migrations
+  - name: "flyway/flyway:latest" # Docker image with Flyway pre-installed
+    args:
+      - -configFiles=/workspace/flyway.conf
+      - migrate
+    env:
+      - FLYWAY_PASSWORD=
+      - FLYWAY_USER=root
+    volumes:
+      - name: "proxy-socket"
+        path: /cloudsql
+
+volumes:
+  - name: "proxy-socket"
+    path: /cloudsql
