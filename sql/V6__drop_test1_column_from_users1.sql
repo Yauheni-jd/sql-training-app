@@ -1,0 +1,1 @@
+ALTER TABLE users1 DROP COLUMN test1;
