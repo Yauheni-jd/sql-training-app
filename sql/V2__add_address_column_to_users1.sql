@@ -1,0 +1,1 @@
+ALTER TABLE users1 ADD COLUMN address VARCHAR(255);

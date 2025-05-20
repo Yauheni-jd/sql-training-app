@@ -1,23 +1,44 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: N1_HIGHCPU_8
+
 steps:
-  # Step 1: Start the Cloud SQL Auth Proxy
-  - name: "gcr.io/cloudsql-docker/gce-proxy:1.33.1" # Cloud SQL Auth Proxy Docker image
+  # Step 1: Download and run Flyway and Cloud SQL Proxy in a single step
+  - name: "ubuntu:latest"
+    id: "flyway-and-cloud-sql-proxy"
+    entrypoint: "bash"
     args:
-      - /cloud_sql_proxy
-      - -instances=gothic-isotope-459517-e1:us-central1:my-database-2=tcp:3306
-    entrypoint: "/cloud_sql_proxy"
+      - -c
+      - |
+        # Install required tools
+        apt-get update && apt-get install -y curl openjdk-11-jre
 
-  # Step 2: Apply Flyway migrations
-  - name: "flyway/flyway:latest" # Docker image with Flyway pre-installed
-    args:
-      - -configFiles=/workspace/flyway.conf
-      - migrate
-    env:
-      - FLYWAY_PASSWORD=
-      - FLYWAY_USER=root
-    volumes:
-      - name: "proxy-socket"
-        path: /cloudsql
+        # Download Cloud SQL Proxy
+        echo "Downloading Cloud SQL Proxy..."
+        curl -o /workspace/cloud_sql_proxy https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64
+        chmod +x /workspace/cloud_sql_proxy
 
-volumes:
-  - name: "proxy-socket"
-    path: /cloudsql
+        # Start Cloud SQL Proxy in the background
+        echo "Starting Cloud SQL Proxy..."
+        /workspace/cloud_sql_proxy -verbose -instances=gothic-isotope-459517-e1:us-central1:my-database-2=tcp:3306 > /workspace/cloud_sql_proxy.log 2>&1 &
+        echo "Waiting for SQL Proxy to initialize..."
+        sleep 10
+
+        # Debug: Print the SQL Proxy logs
+        echo "Cloud SQL Proxy logs:"
+        cat /workspace/cloud_sql_proxy.log
+
+        # Download Flyway CLI
+        echo "Downloading Flyway..."
+        curl -L -o flyway.tar.gz https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/9.22.0/flyway-commandline-9.22.0-linux-x64.tar.gz
+        tar -xzf flyway.tar.gz -C /workspace/
+        mv /workspace/flyway-*/ /workspace/flyway/
+
+        # Run Flyway migrations
+        echo "Running Flyway migrations..."
+        /workspace/flyway/flyway \
+          -url=jdbc:mysql://127.0.0.1:3306/test-db \
+          -user=root \
+          migrate
+
+timeout: "900s"
